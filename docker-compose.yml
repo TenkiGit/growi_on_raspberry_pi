@@ -1,0 +1,62 @@
+version: '3'
+
+services:
+  growi:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: growi
+    ports:
+      # - 127.0.0.1:3000:3000    # localhost only by default
+      - 3000:3000
+    links:
+      - mongo:mongo
+      - elasticsearch:elasticsearch
+    depends_on:
+      - mongo
+      - elasticsearch
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/growi
+      - ELASTICSEARCH_URI=http://elasticsearch:9200/growi
+      - PASSWORD_SEED=changeme
+      - FILE_UPLOAD=local     # activate this line if you use local storage of server rather than AWS
+
+    command: "dockerize
+               -wait tcp://mongo:27017
+               -wait tcp://elasticsearch:9200
+               -timeout 120s
+               npm run server:prod"
+    restart: unless-stopped
+    volumes:
+      - ./data/growi_data:/data
+    tty: true
+
+  mongo:
+    image: arm64v8/mongo:3.6
+    container_name: mongo
+    restart: unless-stopped
+    volumes:
+      - ./data/mongo_configdb:/data/configdb
+      - ./data/mongo_db:/data/db
+
+  elasticsearch:
+    build:
+      context: ./elasticsearch
+      dockerfile: ./Dockerfile
+    container_name: es
+    command: sh bin/elasticsearch
+    environment:
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms256m -Xmx256m"  # increase amount if you have enough memory
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    restart: unless-stopped
+    ports:
+      - 9200:9200
+      - 9300:9300
+    volumes:
+      - ./data/es_data:/usr/share/elasticsearch/data
+      - ./elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
+    tty: true
